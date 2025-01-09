@@ -1,0 +1,47 @@
+name: Deploy AWS Lambda
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt -t ./
+
+    - name: Package Lambda function
+      run: zip -r lambda_function.zip ./*
+
+    - name: Deploy to AWS Lambda
+      uses: aws-actions/aws-lambda-deploy@v1
+      with:
+        function-name: YourLambdaFunctionName
+        zip-file: lambda_function.zip
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION: us-east-1
+
+    - name: Configure environment variables
+      run: |
+        aws lambda update-function-configuration \
+          --function-name YourLambdaFunctionName \
+          --environment Variables={KEY1=value1,KEY2=value2} \
+          --region us-east-1
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
