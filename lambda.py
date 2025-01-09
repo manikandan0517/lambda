@@ -1,17 +1,14 @@
 import requests
 import os
-from dotenv import load_dotenv
 import json
 import boto3
 from botocore.exceptions import ClientError
 
-load_dotenv()
-
 def lambda_handler(event, context):
     try:
         route53 = boto3.client('route53')
-        hosted_zone_id = "your-hosted-zone-id"
-        record_name = "automate-tenant.inspectpoint.com"
+        hosted_zone_id = os.environ.get("HOSTED_ZONE_ID")  # Environment variable for Hosted Zone ID
+        record_name = os.environ.get("RECORD_NAME")  # Environment variable for DNS record name
 
         # Check if the DNS record exists
         if record_exists(route53, hosted_zone_id, record_name):
@@ -49,11 +46,10 @@ def lambda_handler(event, context):
             "body": json.dumps(error_message)
         }
 
-
 def notify_via_ses(subject, message):
     ses_client = boto3.client('ses', region_name="us-east-1")
-    sender = "your-email@example.com"
-    recipient = "recipient-email@example.com"
+    sender = os.environ.get("SENDER_EMAIL")  # Use environment variable for sender email
+    recipient = os.environ.get("RECIPIENT_EMAIL")  # Use environment variable for recipient email
 
     try:
         ses_client.send_email(
@@ -68,9 +64,8 @@ def notify_via_ses(subject, message):
     except ClientError as e:
         print(f"Error sending email notification: {e}")
 
-
 def notify_via_slack(message):
-    slack_webhook_url = os.getenv('SLACK_WEBHOOK_URL')
+    slack_webhook_url = os.environ.get('SLACK_WEBHOOK_URL')  # Slack webhook URL from environment
     payload = {"text": message}
 
     try:
@@ -79,7 +74,6 @@ def notify_via_slack(message):
         print("Slack notification sent successfully.")
     except requests.exceptions.RequestException as e:
         print(f"Error sending Slack notification: {e}")
-
 
 def record_exists(route53, hosted_zone_id, record_name, record_type='CNAME'):
     try:
@@ -104,12 +98,11 @@ def record_exists(route53, hosted_zone_id, record_name, record_type='CNAME'):
         print(f"Error checking for record: {e}")
         return False
 
-
 def process_heroku():
-    app_name = os.getenv('APP_NAME')
-    hostname = "automate-tenant.inspectpoint.com"
-    api_token = os.getenv('API_KEY')
-    certificate_name = "tyrannosaurs-28703"
+    app_name = os.environ.get('APP_NAME')  # Heroku app name from environment
+    hostname = os.environ.get('HOSTNAME')  # Hostname from environment
+    api_token = os.environ.get('API_KEY')  # API token from environment
+    certificate_name = os.environ.get('CERTIFICATE_NAME')  # Certificate name from environment
 
     url = f"https://api.heroku.com/apps/{app_name}/domains"
 
@@ -133,7 +126,6 @@ def process_heroku():
     cname = response_data["cname"]
     print(f"CNAME: {cname}")
     return cname
-
 
 def add_cname_record(route53, hosted_zone_id, record_name, cname_value):
     try:
