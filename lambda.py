@@ -9,7 +9,7 @@ def lambda_handler(event, context):
         route53 = boto3.client('route53')
         hosted_zone_id = os.environ.get("HOSTED_ZONE_ID")  # Environment variable for Hosted Zone ID
         record_name = event.data['record_name']  # Environment variable for DNS record name
-        recepient_mail=event.data['mail'] # Environment variable for
+        recepient_mail=os.environ.get['RECEPIENT_MAIL_ID'] # Environment variable for
         # Check if the DNS record exists
         if record_exists(route53, hosted_zone_id, record_name):
             message = f"Record {record_name} already exists."
@@ -46,7 +46,7 @@ def lambda_handler(event, context):
             "body": json.dumps(error_message)
         }
 
-def notify_via_ses(subject, message, recepient_mail):
+def notify_via_ses(subject, message,recepient_mail):
     ses_client = boto3.client('ses', region_name="us-east-1")
     sender = os.environ.get("SENDER_EMAIL")  # Use environment variable for sender email
     recipient =  recepient_mail# Use environment variable for recipient email
