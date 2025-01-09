@@ -65,7 +65,7 @@ def notify_via_ses(subject, message,recepient_mail):
         print(f"Error sending email notification: {e}")
 
 def notify_via_slack(message):
-    slack_webhook_url = os.environ.get('SLACK_WEBHOOK_URL')  # Slack webhook URL from environment
+    slack_webhook_url = os.environ.get('SLACK_WEBHOOK_URL')  
     payload = {"text": message}
 
     try:
