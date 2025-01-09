@@ -26,7 +26,7 @@ jobs:
     - name: Package Lambda function
       run: zip -r lambda_function.zip ./*
 
-    - name: Deploy to AWS Lambda
+    - name: lambda
       uses: aws-actions/aws-lambda-deploy@v1
       with:
         function-name: lambda
@@ -39,7 +39,7 @@ jobs:
     - name: Configure environment variables
       run: |
         aws lambda update-function-configuration \
-          --function-name YourLambdaFunctionName \
+          --function-name lambda \
           --environment Variables={KEY1=value1,KEY2=value2} \
           --region us-east-1
       env:
