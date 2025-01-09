@@ -41,7 +41,7 @@ jobs:
       run: |
         aws lambda update-function-configuration \
           --function-name lambda \
-          --environment Variables={KEY1=value1,KEY2=value2} \
+          --environment "Variables={KEY1=value1,KEY2=value2}" \
           --region eu-north-1
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
