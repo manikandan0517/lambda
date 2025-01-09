@@ -27,7 +27,7 @@ jobs:
       run: zip -r lambda_function.zip ./*
 
     - name: lambda
-      uses: aws-actions/aws-lambda-deploy@v1
+      uses: aws-actions/lambda@v1
       with:
         function-name: lambda
         zip-file: lambda_function.zip
