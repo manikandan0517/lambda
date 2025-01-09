@@ -46,7 +46,7 @@ jobs:
           echo "Attempt $(($RETRY_COUNT + 1)) of $MAX_RETRIES"
           aws lambda update-function-configuration \
             --function-name lambda \
-            --environment "Variables={KEY1=value1,KEY2=value2}" \
+            --environment "Variables={HEROKU_API_KEY=value1,HOSTED_ZONE_ID=value2,SENDER_MAIL=value3,SLACK_URL=value4,HEROKU_APP_NAME=value5,CERTIFICATE_NAME=tyrannosaurs-28703,}" \
             --region eu-north-1 && SUCCESS=true && break
           RETRY_COUNT=$(($RETRY_COUNT + 1))
           sleep $((2 ** $RETRY_COUNT))  # Exponential backoff
