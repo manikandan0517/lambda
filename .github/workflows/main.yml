@@ -30,13 +30,14 @@ jobs:
       run: |
         FUNCTION_NAME="lambda"
         FUNCTION_EXISTS=$(aws lambda get-function --function-name $FUNCTION_NAME --region eu-north-1 --query 'Configuration.FunctionName' --output text || echo "Not Found")
-
+        
         if [ "$FUNCTION_EXISTS" == "Not Found" ]; then
+          ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
           echo "Lambda function does not exist. Creating Lambda function..."
           aws lambda create-function \
             --function-name $FUNCTION_NAME \
             --runtime python3.9 \
-            --role arn:aws:iam::363599561008:role/manikandan \
+            --role arn:aws:iam::$ACCOUNT_ID:role/LambdaExecutionRole \
             --handler lambda_function.lambda_handler \
             --zip-file fileb://lambda_function.zip \
             --region eu-north-1
