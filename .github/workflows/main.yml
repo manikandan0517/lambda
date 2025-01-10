@@ -44,7 +44,7 @@ jobs:
           aws lambda create-function \
             --function-name $FUNCTION_NAME \
             --runtime python3.9 \
-            --role arn:aws:iam::363599561008:role/manikandan \
+            --role arn:aws:iam::3635-9956-1008:role/manikandan \
             --handler lambda_function.lambda_handler \
             --zip-file fileb://lambda_function.zip \
             --region $AWS_REGION
