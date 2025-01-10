@@ -28,12 +28,12 @@ jobs:
 
     - name: Debug - Print AWS Region
       run: |
-        echo "AWS_REGION is set to: ${{ vars.REGION }}"
+        echo "AWS_REGIONS is set to: ${{ vars.REGIONS }}"
         
     - name: Check if Lambda function exists and create it if not
       run: |
         FUNCTION_NAME="lambda"
-        FUNCTION_EXISTS=$(aws lambda get-function --function-name $FUNCTION_NAME --region ${{ vars.REGION }} --query 'Configuration.FunctionName' --output text || echo "Not Found")
+        FUNCTION_EXISTS=$(aws lambda get-function --function-name $FUNCTION_NAME --region ${{ vars.REGIONS }} --query 'Configuration.FunctionName' --output text || echo "Not Found")
         
         RETRY_COUNT=0
         MAX_RETRIES=5
@@ -49,7 +49,7 @@ jobs:
               --role arn:aws:iam::$ACCOUNT_ID:role/${{ vars.ROLE }} \
               --handler lambda_function.lambda_handler \
               --zip-file fileb://lambda_function.zip \
-              --region ${{ vars.REGION }} && SUCCESS=true && break
+              --region ${{ vars.REGIONS }} && SUCCESS=true && break
           else
             echo "Lambda function already exists."
             SUCCESS=true
@@ -68,7 +68,7 @@ jobs:
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_REGION: ${{ vars.REGION }}
+        AWS_REGION: ${{ vars.REGIONS }}
 
     - name: Deploy Lambda function code with retry
       run: |
@@ -80,7 +80,7 @@ jobs:
           aws lambda update-function-code \
             --function-name lambda \
             --zip-file fileb://lambda_function.zip \
-            --region ${{ vars.REGION }} && SUCCESS=true && break
+            --region ${{ vars.REGIONS }} && SUCCESS=true && break
           RETRY_COUNT=$(($RETRY_COUNT + 1))
           echo "Waiting for Lambda function to be ready..."
           sleep $((2 ** $RETRY_COUNT))  # Exponential backoff
@@ -92,7 +92,7 @@ jobs:
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_REGION: ${{ vars.REGION }}
+        AWS_REGION: ${{ vars.REGIONS }}
 
     - name: Configure environment variables with retry
       run: |
@@ -104,7 +104,7 @@ jobs:
           aws lambda update-function-configuration \
             --function-name lambda \
             --environment "Variables={HEROKU_API_KEY=value1,HOSTED_ZONE_ID=value2,SENDER_MAIL=value3,RECEIVER_MAIL=receviver_mail,SLACK_URL=value4,HEROKU_APP_NAME=value5,CERTIFICATE_NAME=tyrannosaurs-28703,}" \
-            --region ${{ vars.REGION }} && SUCCESS=true && break
+            --region ${{ vars.REGIONS }} && SUCCESS=true && break
           RETRY_COUNT=$(($RETRY_COUNT + 1))
           echo "Waiting for Lambda function to be ready..."
           sleep $((2 ** $RETRY_COUNT))  # Exponential backoff
@@ -116,4 +116,4 @@ jobs:
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_REGION: ${{ vars.REGION }}
+        AWS_REGION: ${{ vars.REGIONS }}
