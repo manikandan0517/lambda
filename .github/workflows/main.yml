@@ -26,6 +26,10 @@ jobs:
     - name: Package Lambda function
       run: zip -r lambda_function.zip ./*
 
+    - name: Debug - Print AWS Region
+      run: |
+        echo "AWS_REGION is set to: ${{ vars.REGION }}"
+        
     - name: Check if Lambda function exists and create it if not
       run: |
         FUNCTION_NAME="lambda"
