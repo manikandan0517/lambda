@@ -44,8 +44,8 @@ jobs:
           echo "Lambda function already exists."
         fi
       env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_ACCESS_KEY_ID: AKIAVJKBZAEYB3TOA3NS
+        AWS_SECRET_ACCESS_KEY: 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
         AWS_REGION: eu-north-1
 
     - name: Deploy Lambda function code with retry
@@ -68,8 +68,8 @@ jobs:
           exit 1
         fi
       env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_ACCESS_KEY_ID: AKIAVJKBZAEYB3TOA3NS
+        AWS_SECRET_ACCESS_KEY: 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
         AWS_REGION: eu-north-1
 
     - name: Configure environment variables with retry
@@ -92,6 +92,6 @@ jobs:
           exit 1
         fi
       env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_ACCESS_KEY_ID: AKIAVJKBZAEYB3TOA3NS
+        AWS_SECRET_ACCESS_KEY: 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
         AWS_REGION: eu-north-1
