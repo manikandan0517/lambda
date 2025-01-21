@@ -3,69 +3,99 @@ import os
 import json
 import boto3
 from botocore.exceptions import ClientError
+from datadog import initialize, api
+
+# Initialize Datadog
+options = {
+    'api_key': 'c75de666fc0996b7091c427b415e99ebc875a766',
+    'app_key': '13d53b92-f236-49a1-9792-0133d59df97e',
+}
+initialize(**options)
+
+def send_error_to_datadog(title, error_message, tags=None):
+    """
+    Sends an error event and metric to Datadog.
+    
+    :param title: Title of the error event
+    :param error_message: Description of the error
+    :param tags: List of tags to include with the event and metric
+    """
+    if tags is None:
+        tags = []
+    
+    try:
+        # Send error event to Datadog
+        api.Event.create(
+            title=title,
+            text=error_message,
+            tags=tags,
+            alert_type="error"
+        )
+        print("Error event sent to Datadog.")
+        
+        # Send error metric to Datadog
+        api.Metric.send(
+            metric="lambda.function.error",
+            points=1,
+            tags=tags
+        )
+        print("Error metric sent to Datadog.")
+    except Exception as e:
+        print(f"Failed to send error to Datadog: {e}")
+
 
 def lambda_handler(event, context):
+    route53 = boto3.client('route53')
+    hosted_zone_id = os.environ.get("HOSTED_ZONE_ID")  # Environment variable for Hosted Zone ID
+    record_name = event.get('record')  # DNS record name from event
+
     try:
-        route53 = boto3.client('route53')
-        hosted_zone_id = os.environ.get("HOSTED_ZONE_ID")  # Environment variable for Hosted Zone ID
-        record_name = event.data['record_name']  # Environment variable for DNS record name
-        recepient_mail=os.environ.get['RECEPIENT_MAIL_ID'] # Environment variable for
         # Check if the DNS record exists
         if record_exists(route53, hosted_zone_id, record_name):
             message = f"Record {record_name} already exists."
             print(message)
+            send_error_to_datadog(
+            title="Lambda Function Error",
+            error_message=message,
+            tags=["lambda", "error", f"function:{context.function_name}"]
+        )
 
-            # Notify via email and Slack
-            notify_via_ses("Record Exists Notification", message,recepient_mail)
-            notify_via_slack(message)
+            # # Notify via Slack
+            # notify_via_slack(message)
 
-            return {
-                "statusCode": 200,
-                "body": json.dumps(message)
-            }
+            # return {
+            #     "statusCode": 200,
+            #     "body": json.dumps(message)
+            # }
 
-        # Process Heroku and add CNAME record if it doesn't exist
-        cname = process_heroku()
-        add_cname_record(route53, hosted_zone_id, record_name, cname)
+        # # Process Heroku and add CNAME record if it doesn't exist
+        # cname = process_heroku()
+        # add_cname_record(route53, hosted_zone_id, record_name, cname)
 
-        return {
-            "statusCode": 200,
-            "body": json.dumps(f"CNAME record created for {record_name} pointing to {cname}.")
-        }
+        # return {
+        #     "statusCode": 200,
+        #     "body": json.dumps(f"CNAME record created for {record_name} pointing to {cname}.")
+        # }
 
     except Exception as e:
-        error_message = f"An error occurred: {e}"
-        print(error_message)
+        error_message = f"An error occurred: {str(e)}"
+        print(f"e:{error_message}")
 
-        # Notify via email and Slack
-        notify_via_ses("Error Notification: Lambda Function", error_message,recepient_mail)
-        notify_via_slack(error_message)
+        # Use the reusable Datadog error function
+        send_error_to_datadog(
+            title="Lambda Function Error",
+            error_message=error_message,
+            tags=["lambda", "error", f"function:{context.function_name}"]
+        )
 
         return {
             "statusCode": 500,
-            "body": json.dumps(error_message)
+            "body": json.dumps({"error": error_message})
         }
 
-def notify_via_ses(subject, message,recepient_mail):
-    ses_client = boto3.client('ses', region_name="us-east-1")
-    sender = os.environ.get("SENDER_EMAIL")  # Use environment variable for sender email
-    recipient =  recepient_mail# Use environment variable for recipient email
-
-    try:
-        ses_client.send_email(
-            Source=sender,
-            Destination={"ToAddresses": [recipient]},
-            Message={
-                "Subject": {"Data": subject},
-                "Body": {"Text": {"Data": message}}
-            }
-        )
-        print("Email notification sent successfully.")
-    except ClientError as e:
-        print(f"Error sending email notification: {e}")
 
 def notify_via_slack(message):
-    slack_webhook_url = os.environ.get('SLACK_WEBHOOK_URL')  
+    slack_webhook_url = os.environ.get('SLACK_WEBHOOK_URL')
     payload = {"text": message}
 
     try:
@@ -74,6 +104,7 @@ def notify_via_slack(message):
         print("Slack notification sent successfully.")
     except requests.exceptions.RequestException as e:
         print(f"Error sending Slack notification: {e}")
+
 
 def record_exists(route53, hosted_zone_id, record_name, record_type='CNAME'):
     try:
@@ -97,6 +128,7 @@ def record_exists(route53, hosted_zone_id, record_name, record_type='CNAME'):
     except ClientError as e:
         print(f"Error checking for record: {e}")
         return False
+
 
 def process_heroku():
     app_name = os.environ.get('APP_NAME')  # Heroku app name from environment
@@ -126,6 +158,7 @@ def process_heroku():
     cname = response_data["cname"]
     print(f"CNAME: {cname}")
     return cname
+
 
 def add_cname_record(route53, hosted_zone_id, record_name, cname_value):
     try:
