@@ -9,15 +9,7 @@ from datadog_api_client.v2.api import logs_api
 from datadog_api_client.v2.models import HTTPLog, HTTPLogItem
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
 load_dotenv()
-
-# Fetch environment variables
-DD_API_KEY = os.getenv("DD_API_KEY")
-DD_SITE = os.getenv("DD_SITE")
-ENV = os.getenv("ENV", "DEV")
-
-# Datadog Logging Setup
 class DDHandler(logging.StreamHandler):
     def __init__(self, configuration, service_name, ddsource):
         super().__init__()
@@ -32,7 +24,7 @@ class DDHandler(logging.StreamHandler):
             body = HTTPLog([
                 HTTPLogItem(
                     ddsource=self.ddsource,
-                    ddtags=f"env:{ENV}",
+                    ddtags=f"env:{os.getenv('ENV', 'DEV')}",
                     message=msg,
                     service=self.service_name,
                 )
@@ -40,7 +32,7 @@ class DDHandler(logging.StreamHandler):
             try:
                 api_instance.submit_log(body)
             except ApiException as e:
-                print(f"Error sending log to Datadog: {e}")
+                print(f"Error sending log: {e}")
 
 class Logger:
     def __init__(self, service_name, ddsource):
@@ -57,20 +49,34 @@ class Logger:
         else:
             self.logger.info(message)
 
-# Initialize Datadog Logger
-logger = Logger(service_name="my-service", ddsource="python")
+
+os.environ["DD_API_KEY"] = os.environ.get("DATADOG_API_KEY")
+os.environ["DD_SITE"] = "us5.datadoghq.com"
+os.environ["ENV"] = "DEV"
+
+logger = Logger(service_name="HEROKU_AUTOMATION", ddsource="python")
+
+
 
 # AWS Route 53 Handling
 def lambda_handler(event, context):
     route53 = boto3.client('route53')
-    hosted_zone_id = 'Z06807453O3BABES1T7W2'
+    hosted_zone_id = os.environ.get('HOSTED_ZONE_ID')
     record_name = event.get('record')
+    print(record_name)
+    print(hosted_zone_id)
 
     try:
         if record_exists(route53, hosted_zone_id, record_name):
             message = f"Record {record_name} already exists."
+            print(message)
             logger.log(message)
             return {"statusCode": 200, "body": json.dumps(message)}
+        else:
+            message = f"Record {record_name} does not exist."
+            cname=process_heroku()
+            if cname:
+                add_cname_record(route53,hosted_zone_id,record_name,cname)
 
     except Exception as e:
         error_message = f"An error occurred: {str(e)}"
@@ -86,6 +92,7 @@ def record_exists(route53, hosted_zone_id, record_name, record_type='CNAME'):
             MaxItems='1'
         )
         record_sets = response.get('ResourceRecordSets', [])
+        print(record_sets)
         if record_sets and record_sets[0]['Name'].rstrip('.') == record_name.rstrip('.') and record_sets[0]['Type'] == record_type:
             return True
         return False
