@@ -103,7 +103,7 @@ jobs:
           echo "Attempt $(($RETRY_COUNT + 1)) of $MAX_RETRIES"
           aws lambda update-function-configuration \
             --function-name lambda \
-            --environment "Variables={HEROKU_API_KEY=value1,HOSTED_ZONE_ID=value2,SENDER_MAIL=value3,RECEIVER_MAIL=receviver_mail,SLACK_URL=value4,HEROKU_APP_NAME=value5,CERTIFICATE_NAME=tyrannosaurs-28703,}" \
+            --environment "Variables={HEROKU_API_KEY=value1,HOSTED_ZONE_ID=value2,SENDER_MAIL=value3,RECEIVER_MAIL=receviver_mail,SLACK_URL=value4,HEROKU_APP_NAME=value5,CERTIFICATE_NAME=tyrannosaurs-28703,DATADOG_API_KEY=datadog_api_key}" \
             --region ${{ vars.REGIONS }} && SUCCESS=true && break
           RETRY_COUNT=$(($RETRY_COUNT + 1))
           echo "Waiting for Lambda function to be ready..."

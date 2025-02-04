@@ -1,110 +1,81 @@
-import requests
 import os
+import logging
+import requests
 import json
 import boto3
 from botocore.exceptions import ClientError
-from datadog import initialize, api
+from datadog_api_client.v2 import ApiClient, ApiException, Configuration
+from datadog_api_client.v2.api import logs_api
+from datadog_api_client.v2.models import HTTPLog, HTTPLogItem
+from dotenv import load_dotenv
 
-# Initialize Datadog
-options = {
-    'api_key': 'c75de666fc0996b7091c427b415e99ebc875a766',
-    'app_key': '13d53b92-f236-49a1-9792-0133d59df97e',
-}
-initialize(**options)
+# Load environment variables from .env file
+load_dotenv()
 
-def send_error_to_datadog(title, error_message, tags=None):
-    """
-    Sends an error event and metric to Datadog.
-    
-    :param title: Title of the error event
-    :param error_message: Description of the error
-    :param tags: List of tags to include with the event and metric
-    """
-    if tags is None:
-        tags = []
-    
-    try:
-        # Send error event to Datadog
-        api.Event.create(
-            title=title,
-            text=error_message,
-            tags=tags,
-            alert_type="error"
-        )
-        print("Error event sent to Datadog.")
-        
-        # Send error metric to Datadog
-        api.Metric.send(
-            metric="lambda.function.error",
-            points=1,
-            tags=tags
-        )
-        print("Error metric sent to Datadog.")
-    except Exception as e:
-        print(f"Failed to send error to Datadog: {e}")
+# Fetch environment variables
+DD_API_KEY = os.getenv("DD_API_KEY")
+DD_SITE = os.getenv("DD_SITE")
+ENV = os.getenv("ENV", "DEV")
 
+# Datadog Logging Setup
+class DDHandler(logging.StreamHandler):
+    def __init__(self, configuration, service_name, ddsource):
+        super().__init__()
+        self.configuration = configuration
+        self.service_name = service_name
+        self.ddsource = ddsource
 
+    def emit(self, record):
+        msg = self.format(record)
+        with ApiClient(self.configuration) as api_client:
+            api_instance = logs_api.LogsApi(api_client)
+            body = HTTPLog([
+                HTTPLogItem(
+                    ddsource=self.ddsource,
+                    ddtags=f"env:{ENV}",
+                    message=msg,
+                    service=self.service_name,
+                )
+            ])
+            try:
+                api_instance.submit_log(body)
+            except ApiException as e:
+                print(f"Error sending log to Datadog: {e}")
+
+class Logger:
+    def __init__(self, service_name, ddsource):
+        self.configuration = Configuration()
+        self.logger = logging.getLogger("datadog_logger")
+        self.logger.setLevel(logging.INFO)
+        dd_handler = DDHandler(self.configuration, service_name, ddsource)
+        dd_handler.setFormatter(logging.Formatter("%(message)s"))
+        self.logger.addHandler(dd_handler)
+
+    def log(self, message, level="info"):
+        if level == "error":
+            self.logger.error(message)
+        else:
+            self.logger.info(message)
+
+# Initialize Datadog Logger
+logger = Logger(service_name="my-service", ddsource="python")
+
+# AWS Route 53 Handling
 def lambda_handler(event, context):
     route53 = boto3.client('route53')
-    hosted_zone_id = os.environ.get("HOSTED_ZONE_ID")  # Environment variable for Hosted Zone ID
-    record_name = event.get('record')  # DNS record name from event
+    hosted_zone_id = 'Z06807453O3BABES1T7W2'
+    record_name = event.get('record')
 
     try:
-        # Check if the DNS record exists
         if record_exists(route53, hosted_zone_id, record_name):
             message = f"Record {record_name} already exists."
-            print(message)
-            send_error_to_datadog(
-            title="Lambda Function Error",
-            error_message=message,
-            tags=["lambda", "error", f"function:{context.function_name}"]
-        )
-
-            # # Notify via Slack
-            # notify_via_slack(message)
-
-            # return {
-            #     "statusCode": 200,
-            #     "body": json.dumps(message)
-            # }
-
-        # # Process Heroku and add CNAME record if it doesn't exist
-        # cname = process_heroku()
-        # add_cname_record(route53, hosted_zone_id, record_name, cname)
-
-        # return {
-        #     "statusCode": 200,
-        #     "body": json.dumps(f"CNAME record created for {record_name} pointing to {cname}.")
-        # }
+            logger.log(message)
+            return {"statusCode": 200, "body": json.dumps(message)}
 
     except Exception as e:
         error_message = f"An error occurred: {str(e)}"
-        print(f"e:{error_message}")
-
-        # Use the reusable Datadog error function
-        send_error_to_datadog(
-            title="Lambda Function Error",
-            error_message=error_message,
-            tags=["lambda", "error", f"function:{context.function_name}"]
-        )
-
-        return {
-            "statusCode": 500,
-            "body": json.dumps({"error": error_message})
-        }
-
-
-def notify_via_slack(message):
-    slack_webhook_url = os.environ.get('SLACK_WEBHOOK_URL')
-    payload = {"text": message}
-
-    try:
-        response = requests.post(slack_webhook_url, json=payload)
-        response.raise_for_status()
-        print("Slack notification sent successfully.")
-    except requests.exceptions.RequestException as e:
-        print(f"Error sending Slack notification: {e}")
-
+        logger.log(error_message, level="error")
+        return {"statusCode": 500, "body": json.dumps({"error": error_message})}
 
 def record_exists(route53, hosted_zone_id, record_name, record_type='CNAME'):
     try:
@@ -114,51 +85,40 @@ def record_exists(route53, hosted_zone_id, record_name, record_type='CNAME'):
             StartRecordType=record_type,
             MaxItems='1'
         )
-
         record_sets = response.get('ResourceRecordSets', [])
-        if record_sets:
-            record = record_sets[0]
-            if record['Name'].rstrip('.') == record_name.rstrip('.') and record['Type'] == record_type:
-                print(f"Record {record_name} of type {record_type} already exists.")
-                return True
-
-        print(f"Record {record_name} of type {record_type} does not exist.")
+        if record_sets and record_sets[0]['Name'].rstrip('.') == record_name.rstrip('.') and record_sets[0]['Type'] == record_type:
+            return True
         return False
 
     except ClientError as e:
-        print(f"Error checking for record: {e}")
+        error_message = f"Error checking for record: {e}"
+        logger.log(error_message, level="error")
         return False
-
-
 def process_heroku():
-    app_name = os.environ.get('APP_NAME')  # Heroku app name from environment
-    hostname = os.environ.get('HOSTNAME')  # Hostname from environment
-    api_token = os.environ.get('API_KEY')  # API token from environment
-    certificate_name = os.environ.get('CERTIFICATE_NAME')  # Certificate name from environment
+    app_name = os.environ.get('APP_NAME')
+    hostname = os.environ.get('HOSTNAME')
+    api_token = os.environ.get('API_KEY')
+    certificate_name = os.environ.get('CERTIFICATE_NAME')
 
     url = f"https://api.heroku.com/apps/{app_name}/domains"
-
     headers = {
         "Authorization": f"Bearer {api_token}",
         "Content-Type": "application/json",
         "Accept": "application/vnd.heroku+json; version=3",
     }
 
-    payload = {
-        "hostname": hostname,
-        "sni_endpoint": certificate_name,
-    }
+    payload = {"hostname": hostname, "sni_endpoint": certificate_name}
     response = requests.post(url, json=payload, headers=headers)
-    print(f"Status Code: {response.status_code}")
 
     if response.status_code != 201:
-        raise Exception(f"Heroku API error: {response.text}")
+        error_message = f"Heroku API error: {response.text}"
+        logger.log(error_message, level="error")
+        raise Exception(error_message)
 
     response_data = response.json()
     cname = response_data["cname"]
-    print(f"CNAME: {cname}")
+    logger.log(f"Heroku CNAME: {cname}")
     return cname
-
 
 def add_cname_record(route53, hosted_zone_id, record_name, cname_value):
     try:
@@ -177,10 +137,8 @@ def add_cname_record(route53, hosted_zone_id, record_name, cname_value):
             HostedZoneId=hosted_zone_id,
             ChangeBatch=change_batch
         )
-        print(f"CNAME record created for {record_name} pointing to {cname_value}")
-
+        logger.log(f"CNAME record created for {record_name} pointing to {cname_value}")
     except route53.exceptions.InvalidChangeBatch as e:
-        print(f"Error creating CNAME record: Record already exists. {e}")
-
+        logger.log(f"Error creating CNAME record: Record already exists. {e}", level="error")
     except ClientError as e:
-        print(f"Error creating CNAME record: {e}")
+        logger.log(f"Error creating CNAME record: {e}", level="error")
