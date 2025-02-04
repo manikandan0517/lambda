@@ -54,7 +54,7 @@ os.environ["DD_API_KEY"] = os.environ.get("DATADOG_API_KEY")
 os.environ["DD_SITE"] = "us5.datadoghq.com"
 os.environ["ENV"] = "DEV"
 
-logger = Logger(service_name="HEROKU_AUTOMATION", ddsource="python")
+logger = Logger(service_name="INSPECTPOINT-DNS-AUTOMATION", ddsource="python")
 
 
 
@@ -98,34 +98,39 @@ def record_exists(route53, hosted_zone_id, record_name, record_type='CNAME'):
         return False
 
     except ClientError as e:
-        error_message = f"Error checking for record: {e}"
+        error_message = f"Error checking for record in Route53: {e}"
         logger.log(error_message, level="error")
         return False
 def process_heroku():
-    app_name = os.environ.get('APP_NAME')
-    hostname = os.environ.get('HOSTNAME')
-    api_token = os.environ.get('API_KEY')
-    certificate_name = os.environ.get('CERTIFICATE_NAME')
+    try:
+        app_name = os.environ.get('APP_NAME')
+        hostname = os.environ.get('HOSTNAME')
+        api_token = os.environ.get('API_KEY')
+        certificate_name = os.environ.get('CERTIFICATE_NAME')
 
-    url = f"https://api.heroku.com/apps/{app_name}/domains"
-    headers = {
-        "Authorization": f"Bearer {api_token}",
-        "Content-Type": "application/json",
-        "Accept": "application/vnd.heroku+json; version=3",
-    }
+        url = f"https://api.heroku.com/apps/{app_name}/domains"
+        headers = {
+            "Authorization": f"Bearer {api_token}",
+            "Content-Type": "application/json",
+            "Accept": "application/vnd.heroku+json; version=3",
+        }
 
-    payload = {"hostname": hostname, "sni_endpoint": certificate_name}
-    response = requests.post(url, json=payload, headers=headers)
+        payload = {"hostname": hostname, "sni_endpoint": certificate_name}
+        response = requests.post(url, json=payload, headers=headers)
 
-    if response.status_code != 201:
-        error_message = f"Heroku API error: {response.text}"
+        if response.status_code != 201:
+            error_message = f"Heroku API error: {response.text}"
+            logger.log(error_message, level="error")
+            raise Exception(error_message)
+
+        response_data = response.json()
+        cname = response_data["cname"]
+        logger.log(f"Heroku CNAME: {cname}")
+        return cname
+    except Exception as e:
+        error_message = f"Error processing Heroku domain: {str(e)}"
         logger.log(error_message, level="error")
-        raise Exception(error_message)
-
-    response_data = response.json()
-    cname = response_data["cname"]
-    logger.log(f"Heroku CNAME: {cname}")
-    return cname
+        return None
 
 def add_cname_record(route53, hosted_zone_id, record_name, cname_value):
     try:
@@ -144,8 +149,8 @@ def add_cname_record(route53, hosted_zone_id, record_name, cname_value):
             HostedZoneId=hosted_zone_id,
             ChangeBatch=change_batch
         )
-        logger.log(f"CNAME record created for {record_name} pointing to {cname_value}")
+        logger.log(f"CNAME record created for {record_name} pointing to {cname_value} in Route53")
     except route53.exceptions.InvalidChangeBatch as e:
         logger.log(f"Error creating CNAME record: Record already exists. {e}", level="error")
     except ClientError as e:
-        logger.log(f"Error creating CNAME record: {e}", level="error")
+        logger.log(f"Error creating CNAME record in Route53: {e}", level="error")
