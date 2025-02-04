@@ -2,3 +2,5 @@ requests
 boto3
 python-dotenv
 datadog
+datadog
+datadog-api-client
