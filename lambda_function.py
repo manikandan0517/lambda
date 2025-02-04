@@ -74,9 +74,9 @@ def lambda_handler(event, context):
             return {"statusCode": 200, "body": json.dumps(message)}
         else:
             message = f"Record {record_name} does not exist."
-            cname=process_heroku()
-            if cname:
-                add_cname_record(route53,hosted_zone_id,record_name,cname)
+            # cname=process_heroku()
+            # if cname:
+            #     add_cname_record(route53,hosted_zone_id,record_name,cname)
 
     except Exception as e:
         error_message = f"An error occurred: {str(e)}"

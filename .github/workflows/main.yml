@@ -32,7 +32,7 @@ jobs:
         
     - name: Check if Lambda function exists and create it if not
       run: |
-        FUNCTION_NAME="lambda"
+        FUNCTION_NAME="inspectpoint-dns-automation"
         FUNCTION_EXISTS=$(aws lambda get-function --function-name $FUNCTION_NAME --region ${{ vars.REGIONS }} --query 'Configuration.FunctionName' --output text || echo "Not Found")
         
         RETRY_COUNT=0
