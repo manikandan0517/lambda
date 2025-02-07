@@ -107,7 +107,7 @@ jobs:
             --region ${{ vars.REGIONS }} && SUCCESS=true && break
           RETRY_COUNT=$(($RETRY_COUNT + 1))
           echo "Waiting for Lambda function to be ready..."
-          sleep $((2 ** $RETRY_COUNT))  # Exponential backoff
+          sleep $((2 ** $RETRY_COUNT))  # Exponentifre
         done
         if [ "$SUCCESS" = false ]; then
           echo "Failed to update Lambda function configuration after $MAX_RETRIES attempts."
