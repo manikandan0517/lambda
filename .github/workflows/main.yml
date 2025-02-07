@@ -10,110 +10,87 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt -t ./
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -t ./
 
-    - name: Package Lambda function
-      run: zip -r lambda_function.zip ./*
+      - name: Package Lambda function
+        run: zip -r lambda_function.zip ./*
 
-    - name: Debug - Print AWS Region
-      run: |
-        echo "AWS_REGIONS is set to: ${{ vars.REGIONS }}"
-        
-    - name: Check if Lambda function exists and create it if not
-      run: |
-        FUNCTION_NAME="inspectpoint-dns-automation"
-        FUNCTION_EXISTS=$(aws lambda get-function --function-name $FUNCTION_NAME --region ${{ vars.REGIONS }} --query 'Configuration.FunctionName' --output text || echo "Not Found")
-        
-        RETRY_COUNT=0
-        MAX_RETRIES=5
-        SUCCESS=false
+      - name: Debug - Print AWS Region
+        run: |
+          echo "AWS_REGION is set to: ${{ vars.REGION }}"
 
-        while [[ $RETRY_COUNT -lt $MAX_RETRIES ]]; do
-          if [ "$FUNCTION_EXISTS" == "Not Found" ]; then
-            ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
-            echo "Lambda function does not exist. Creating Lambda function..."
-            aws lambda create-function \
-              --function-name $FUNCTION_NAME \
-              --runtime python3.9 \
-              --role arn:aws:iam::$ACCOUNT_ID:role/${{ vars.ROLE }} \
-              --handler lambda_function.lambda_handler \
-              --zip-file fileb://lambda_function.zip \
-              --region ${{ vars.REGIONS }} && SUCCESS=true && break
-          else
-            echo "Lambda function already exists."
-            SUCCESS=true
-            break
+      - name: Check if Lambda function exists and create it if not
+        run: |
+          FUNCTION_NAME="inspectpoint-dns-creation"
+          FUNCTION_EXISTS=$(aws lambda get-function --function-name $FUNCTION_NAME --region ${{ vars.REGION }} --query 'Configuration.FunctionName' --output text || echo "Not Found")
+
+          RETRY_COUNT=0
+          MAX_RETRIES=5
+          SUCCESS=false
+
+          while [[ $RETRY_COUNT -lt $MAX_RETRIES ]]; do
+            if [ "$FUNCTION_EXISTS" == "Not Found" ]; then
+              ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+              echo "Lambda function does not exist. Creating Lambda function..."
+              aws lambda create-function \
+                --function-name $FUNCTION_NAME \
+                --runtime python3.9 \
+                --role arn:aws:iam::$ACCOUNT_ID:role/${{ vars.ROLE }} \
+                --handler lambda_function.lambda_handler \
+                --zip-file fileb://lambda_function.zip \
+                --region ${{ vars.REGION }} && SUCCESS=true && break
+            else
+              echo "Lambda function already exists."
+              SUCCESS=true
+              break
+            fi
+            
+            RETRY_COUNT=$(($RETRY_COUNT + 1))
+            echo "Waiting before retrying..."
+            sleep $((2 ** $RETRY_COUNT))  # Exponential backoff
+          done
+
+          if [ "$SUCCESS" = false ]; then
+            echo "Failed to create Lambda function after $MAX_RETRIES attempts."
+            exit 1
           fi
-          
-          RETRY_COUNT=$(($RETRY_COUNT + 1))
-          echo "Waiting before retrying..."
-          sleep $((2 ** $RETRY_COUNT))  # Exponential backoff
-        done
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.REGION }}
 
-        if [ "$SUCCESS" = false ]; then
-          echo "Failed to create Lambda function after $MAX_RETRIES attempts."
-          exit 1
-        fi
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_REGION: ${{ vars.REGIONS }}
-
-    - name: Deploy Lambda function code with retry
-      run: |
-        RETRY_COUNT=0
-        MAX_RETRIES=5
-        SUCCESS=false
-        while [[ $RETRY_COUNT -lt $MAX_RETRIES ]]; do
-          echo "Attempt $(($RETRY_COUNT + 1)) of $MAX_RETRIES"
-          aws lambda update-function-code \
-            --function-name lambda \
-            --zip-file fileb://lambda_function.zip \
-            --region ${{ vars.REGIONS }} && SUCCESS=true && break
-          RETRY_COUNT=$(($RETRY_COUNT + 1))
-          echo "Waiting for Lambda function to be ready..."
-          sleep $((2 ** $RETRY_COUNT))  # Exponential backoff
-        done
-        if [ "$SUCCESS" = false ]; then
-          echo "Failed to update Lambda function code after $MAX_RETRIES attempts."
-          exit 1
-        fi
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_REGION: ${{ vars.REGIONS }}
-
-    - name: Configure environment variables with retry
-      run: |
-        RETRY_COUNT=0
-        MAX_RETRIES=5
-        SUCCESS=false
-        while [[ $RETRY_COUNT -lt $MAX_RETRIES ]]; do
-          echo "Attempt $(($RETRY_COUNT + 1)) of $MAX_RETRIES"
-          aws lambda update-function-configuration \
-            --function-name lambda \
-            --environment "Variables={HEROKU_API_KEY=value1,HOSTED_ZONE_ID=value2,SENDER_MAIL=value3,RECEIVER_MAIL=receviver_mail,SLACK_URL=value4,HEROKU_APP_NAME=value5,CERTIFICATE_NAME=tyrannosaurs-28703,DATADOG_API_KEY=datadog_api_key}" \
-            --region ${{ vars.REGIONS }} && SUCCESS=true && break
-          RETRY_COUNT=$(($RETRY_COUNT + 1))
-          echo "Waiting for Lambda function to be ready..."
-          sleep $((2 ** $RETRY_COUNT))  # Exponentifre
-        done
-        if [ "$SUCCESS" = false ]; then
-          echo "Failed to update Lambda function configuration after $MAX_RETRIES attempts."
-          exit 1
-        fi
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_REGION: ${{ vars.REGIONS }}
+      - name: Deploy Lambda function code with retry
+        run: |
+          FUNCTION_NAME="inspectpoint-dns-creation"
+          RETRY_COUNT=0
+          MAX_RETRIES=5
+          SUCCESS=false
+          while [[ $RETRY_COUNT -lt $MAX_RETRIES ]]; do
+            echo "Attempt $(($RETRY_COUNT + 1)) of $MAX_RETRIES"
+            aws lambda update-function-code \
+              --function-name "$FUNCTION_NAME" \
+              --zip-file fileb://lambda_function.zip \
+              --region ${{ vars.REGION }} && SUCCESS=true && break
+            RETRY_COUNT=$(($RETRY_COUNT + 1))
+            echo "Waiting for Lambda function to be ready..."
+            sleep $((2 ** $RETRY_COUNT))  # Exponential backoff
+          done
+          if [ "$SUCCESS" = false ]; then
+            echo "Failed to update Lambda function code after $MAX_RETRIES attempts."
+            exit 1
+          fi
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.REGION }}
